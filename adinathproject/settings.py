@@ -83,7 +83,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'AdinathDatabase',
         'USER':'postgres',
-        'PASSWORD':'aravind2203',
+        'PASSWORD':'',
         'HOST':'localhost',
         'POST':'5432',
     }
