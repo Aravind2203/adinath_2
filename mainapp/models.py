@@ -67,3 +67,35 @@ class Invitations(models.Model):
 
     def __str__(self):
         return self.Name
+
+
+
+
+class HomeCategories(models.Model):
+    image=models.ImageField(upload_to='categoryimages')
+    name=models.OneToOneField(Category,on_delete=models.CASCADE)
+
+
+class Gifts(models.Model):
+    image=models.ImageField(upload_to='Giftimages/')
+    Subcategory_name=models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.Subcategory_name
+
+
+
+class Personalized(models.Model):
+    image=models.ImageField(upload_to='Personalized/')
+    subcategory_name=models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.subcategory_name
+
+    
+class Tresures(models.Model):
+    image=models.ImageField(upload_to='Tresures/')
+    subcategory_name=models.CharField(max_length=100)
+
+    def __str__(self):
+        return self.subcategory_name
