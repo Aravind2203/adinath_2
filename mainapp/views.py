@@ -1,14 +1,14 @@
 from django.shortcuts import render,redirect
 from django.http import HttpResponse
-from .forms import OrderForm
+from .forms import OrderForm,InvitaitonForm
 from xhtml2pdf import pisa
 # Create your views here.
-from .models import Product,Order,Category,Carousel
+from .models import Product,Order,Category,Carousel,HomeCategories,Invitations,Gifts,Tresures,Personalized
 from .cart import Cart
 import string
 import random
 import uuid
-
+from django.contrib.postgres.search import SearchQuery,SearchVector,SearchRank
 
 
 def generate_unique_code():
@@ -23,23 +23,34 @@ def generate_unique_code():
     return code
 
 def home(request):
-    covid19_care=Product.objects.filter(product_category=Category.objects.get(category_name='Covid-19 care'))
-   
+    cat=HomeCategories.objects.all()
+    gift=Gifts.objects.all()
     coursel=Carousel.objects.get(id_image=1)
     coursel_2=Carousel.objects.get(id_image=2)
-    return render(request,'index.html',context={'covid':covid19_care,'coursel':coursel,'coursel_2':coursel_2})
+    coursel_3=Carousel.objects.get(id_image=3)
+    coursel_4=Carousel.objects.get(id_image=4)
+    tresures=Tresures.objects.all()
+    personals=Personalized.objects.all()
+    invite=InvitaitonForm()
+    if request.method=='POST':
+        name=request.POST.get('name')
+        number=request.POST.get('number')
+        email=request.POST.get('email')
+        if len(number)<=10:
+            invitation=Invitations(Name=name,Number=number,Email=email)
+            invitation.save()
+            return render(request,'index.html',context={'coursel':coursel,'coursel_2':coursel_2,'coursel_3':coursel_3,'coursel_4':coursel_4,'cat':cat,'invite':invite,'gift':gift,'invalid_credentials':"Your invitation has been recieved! You will soon be contacted by our sales executives...Have a nice day..",'personalized':personals,"tresures":tresures})
+
+        else:
+            return render(request,'index.html',context={'coursel':coursel,'coursel_2':coursel_2,'coursel_3':coursel_3,'coursel_4':coursel_4,'cat':cat,'invite':invite,'gift':gift,'invalid_credentials':"Invalid credentials try again!",'personalized':personals,"tresures":tresures})
+    
+    return render(request,'index.html',context={'coursel':coursel,'coursel_2':coursel_2,'coursel_3':coursel_3,'coursel_4':coursel_4,'cat':cat,'invite':invite,'gift':gift,'personalized':personals,"tresures":tresures})
 
 def _404_page(request,exception):
     return render(request,'page_404.html')
 
-def add(request):
-    '''if request.method=="POST":
-        file=request.POST['file']
-        o=Order(order_data=file,order_completed=True)
-        o.save()
-        return HttpResponse("success")'''
-    form=OrderForm(request.POST)
-    form.save()
+def _500_page(request):
+    return render(request,template_name='page_500.html')
 
 
 def cart_add(request, id):
@@ -82,14 +93,29 @@ def cart_clear(request):
 
 
 def cart_detail(request):
-    print(request.POST)
-    print(request.session.get('cart'))
+    '''print(request.POST)
+    print(request.session.get('cart'))'''
+    if request.method=='POST':
+        if request.session.get('cart'):
+            x=list(request.session.get('cart').keys())
+            y=list(request.session.get('cart').values())
+            print("Y:",y)
+            print(x)
+            if len(request.POST['number'])==10:
+                for i in range(len(x)):
+                    print("i:",i)
+                    p=Product.objects.get(id=int(x[i]))
+                    quantity=y[i]
+                    o=Order(code=generate_unique_code(),product=p,product_quantity=quantity['quantity'],customer_name=request.POST['firstname'],customer_email=request.POST['email'],customer_number=request.POST['number'],customer_address=request.POST['address'],order_completed=False)
+                    o.save()
+                cart=Cart(request)
+                cart.clear()
+                return render(request,'cart.html',context={"success":'Congradulations..!your order has been placed.....'})
+            else:
+                return render(request, 'cart.html',context={'invalid_credentials':'OOps!..invalid credentials..Try again...'})
     return render(request, 'cart.html')
     
-def hf(request,category):
-    p=Product.objects.filter(product_sub_category=category)
-    return render(request,'hf.html',context={'f':p})
-    
+
 
 
 def addtobase(request):
@@ -99,14 +125,16 @@ def addtobase(request):
             y=list(request.session.get('cart').values())
             print("Y:",y)
             print(x)
-            for i in range(len(x)):
-                print("i:",i)
-                p=Product.objects.get(id=int(x[i]))
-                quantity=y[i]
-                o=Order(code=generate_unique_code(),product=p,product_quantity=quantity['quantity'],customer_name=request.POST['firstname'],customer_email=request.POST['email'],customer_number=request.POST['city'],customer_address=request.POST['address'],order_completed=False)
-                o.save()
-            return cart_clear(request)
-
+            if len(request.POST['number'])==10:
+                for i in range(len(x)):
+                    print("i:",i)
+                    p=Product.objects.get(id=int(x[i]))
+                    quantity=y[i]
+                    o=Order(code=generate_unique_code(),product=p,product_quantity=quantity['quantity'],customer_name=request.POST['firstname'],customer_email=request.POST['email'],customer_number=request.POST['number'],customer_address=request.POST['address'],order_completed=False)
+                    o.save()
+                return cart_clear(request)
+            else:
+                return render
 
 def detail(request,id):
     product=Product.objects.get(id=id)
@@ -115,16 +143,30 @@ def detail(request,id):
 
 
 def product_page(request,category):
-    items=Product.objects.filter(product_sub_category__contains=category)
+    try:
+        items=Product.objects.filter(product_category=Category.objects.get(category_name=category))
+    except:
+        items=Product.objects.filter(product_sub_category__contains=category)
     return render(request,'products.html',{'items':items})
     
 
 def search(request):
     if request.method=='GET':
         keyword=request.GET['search']
-        items=Product.objects.filter(product_sub_category__contains=keyword)
-        if len(items)>0:
-            return render(request,'products.html',{'items':items})
+        categories=Category.objects.annotate(search=SearchVector('category_name'),).filter(search=SearchQuery(keyword))
+        print(categories)
+        if len(categories)<1:
+            items=Product.objects.annotate(search=SearchVector('product_code','product_name','product_description','product_sub_category'),).filter(search=SearchQuery(keyword))
+            if len(items)>0:
+                print(items)
+                return render(request,'products.html',{'items':items})
+            else:
+                items=Product.objects.all()
+                return render(request,'products.html',{'items':items,'notfound':'Oops! We couldn\'t process your request.  See our other products!'})
         else:
-            items=Product.objects.all()
-            return render(request,'products.html',{'items':items,'notfound':'Oops! We couldn\'t process your request.  See our other products!'})
+            
+            for i in categories:
+                items=Product.objects.filter(product_category=i)
+            return render(request,'products.html',{'items':items})
+        
+
